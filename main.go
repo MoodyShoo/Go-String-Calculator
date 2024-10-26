@@ -14,20 +14,20 @@ func isOperator(r rune) bool {
 
 func IsValidFormula(expression string) bool {
 	prevWasOperator := true
-	stack := make([]rune, 0)
+	stack := 0
 
 	for _, r := range expression {
 		switch {
 		case unicode.IsDigit(r) || r == '.':
 			prevWasOperator = false
 		case r == '(':
-			stack = append(stack, r)
+			stack++
 			prevWasOperator = true
 		case r == ')':
-			if len(stack) == 0 {
+			if stack == 0 {
 				return false
 			}
-			stack = stack[:len(stack)-1]
+			stack--
 			prevWasOperator = false
 		case isOperator(r):
 			if prevWasOperator {
@@ -39,11 +39,7 @@ func IsValidFormula(expression string) bool {
 		}
 	}
 
-	if len(stack) > 0 || prevWasOperator {
-		return false
-	}
-
-	return true
+	return stack == 0 && !prevWasOperator
 }
 
 func applyOperation(numbers_stack *[]float64, operator rune) error {
@@ -69,6 +65,7 @@ func applyOperation(numbers_stack *[]float64, operator rune) error {
 		}
 		result = a / b
 	}
+
 	*numbers_stack = append(*numbers_stack, result)
 	return nil
 }
@@ -89,63 +86,54 @@ func Calc(expression string) (float64, error) {
 	trimmed := strings.ReplaceAll(expression, " ", "")
 
 	if !IsValidFormula(trimmed) {
-		return 0.0, errors.New("кекоректаня формула")
+		return 0.0, errors.New("некорректная формула")
 	}
 
-	numbers_stack := make([]float64, 0)
-	operators_stack := make([]rune, 0)
-
+	var numbers []float64
+	var operators []rune
 	var buffer []rune
+
 	for _, r := range trimmed {
 		switch {
 		case unicode.IsDigit(r) || r == '.':
 			buffer = append(buffer, r)
-
-		case r == '+' || r == '-' || r == '*' || r == '/':
+		case isOperator(r):
 			if len(buffer) > 0 {
 				num, err := strconv.ParseFloat(string(buffer), 64)
 				if err != nil {
 					return 0.0, errors.New("ошибка преобразования числа")
 				}
-				numbers_stack = append(numbers_stack, num)
+				numbers = append(numbers, num)
 				buffer = buffer[:0]
 			}
-
-			for len(operators_stack) > 0 && precedence(operators_stack[len(operators_stack)-1]) >= precedence(r) {
-				if operators_stack[len(operators_stack)-1] == '(' {
+			for len(operators) > 0 && precedence(operators[len(operators)-1]) >= precedence(r) {
+				if operators[len(operators)-1] == '(' {
 					break
 				}
-				if err := applyOperation(&numbers_stack, operators_stack[len(operators_stack)-1]); err != nil {
+				if err := applyOperation(&numbers, operators[len(operators)-1]); err != nil {
 					return 0.0, err
 				}
-				operators_stack = operators_stack[:len(operators_stack)-1]
+				operators = operators[:len(operators)-1]
 			}
-			operators_stack = append(operators_stack, r)
-
+			operators = append(operators, r)
 		case r == '(':
-			operators_stack = append(operators_stack, r)
-
+			operators = append(operators, r)
 		case r == ')':
 			if len(buffer) > 0 {
 				num, err := strconv.ParseFloat(string(buffer), 64)
 				if err != nil {
 					return 0.0, errors.New("ошибка преобразования числа")
 				}
-				numbers_stack = append(numbers_stack, num)
+				numbers = append(numbers, num)
 				buffer = buffer[:0]
 			}
-
-			for len(operators_stack) > 0 && operators_stack[len(operators_stack)-1] != '(' {
-				if err := applyOperation(&numbers_stack, operators_stack[len(operators_stack)-1]); err != nil {
+			for len(operators) > 0 && operators[len(operators)-1] != '(' {
+				if err := applyOperation(&numbers, operators[len(operators)-1]); err != nil {
 					return 0.0, err
 				}
-				operators_stack = operators_stack[:len(operators_stack)-1]
+				operators = operators[:len(operators)-1]
 			}
-
-			if len(operators_stack) == 0 || operators_stack[len(operators_stack)-1] != '(' {
-				return 0.0, errors.New("несбалансированные скобки")
-			}
-			operators_stack = operators_stack[:len(operators_stack)-1]
+			operators = operators[:len(operators)-1]
 		}
 	}
 
@@ -154,24 +142,21 @@ func Calc(expression string) (float64, error) {
 		if err != nil {
 			return 0.0, errors.New("ошибка преобразования числа")
 		}
-		numbers_stack = append(numbers_stack, num)
+		numbers = append(numbers, num)
 	}
 
-	for len(operators_stack) > 0 {
-		if operators_stack[len(operators_stack)-1] == '(' {
-			return 0.0, errors.New("несбалансированные скобки")
-		}
-		if err := applyOperation(&numbers_stack, operators_stack[len(operators_stack)-1]); err != nil {
+	for len(operators) > 0 {
+		if err := applyOperation(&numbers, operators[len(operators)-1]); err != nil {
 			return 0.0, err
 		}
-		operators_stack = operators_stack[:len(operators_stack)-1]
+		operators = operators[:len(operators)-1]
 	}
 
-	if len(numbers_stack) != 1 {
+	if len(numbers) != 1 {
 		return 0.0, errors.New("ошибка вычислений")
 	}
 
-	return numbers_stack[0], nil
+	return numbers[0], nil
 }
 
 func main() {
